@@ -4,16 +4,7 @@ services:
     container_name: partynode-host
     restart: unless-stopped
     ports:
-      - "8080:8080" # Local Pack Studio & Node Status Web UI
-    environment:
-      - GATEWAY_WS_URL=${GATEWAY_WS_URL}
-      - PAIRING_TOKEN=${PAIRING_TOKEN}
-      - NODE_NAME=${NODE_NAME:-My Community PartyNode}
-      - NODE_ADMIN_KEY=${NODE_ADMIN_KEY:-}
-      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_MODEL=${OPENAI_MODEL:-}
+      - "8080:8080" # Open http://<server-ip>:8080 in your browser to configure & pair!
     volumes:
       - partynode_node_data:/app/data
 

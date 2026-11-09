@@ -1,34 +1,14 @@
 # PartyNode Server — Self-Hosted Discord Game Node
 
-Run your own private, customizable game server for the **PartyNode** Discord Voice Activity—with **zero port forwarding, zero SSL certificates, and zero domain setup**.
+Run your own private, customizable game server for the **PartyNode** Discord Voice Activity—with **zero port forwarding, zero SSL certificates, and zero configuration files needed at install**.
 
-Your node connects **outbound** over encrypted WebSockets (`wss://`) to the PartyNode Gateway, executes all game rooms locally on your hardware (`amd64` or `arm64` / Raspberry Pi / NAS / VPS / PC), and stores all of your server's custom content packs locally in `./partynode-data`.
-
-## Supported Party Games
-- **Punchline Clash** (*Quiplash-style* head-to-head comedy prompts + 3-medal Final Showdown)
-- **Bluff Battle** (*Fibbage-style* truth-and-lies deception with fuzzy Truth Guard + 😂 Best Bluff bonuses)
-- **Survey Showdown** (*Family Feud-style* ranked survey flip board with Auto-Judge + optional Live MC Answer Sheet)
-- **BlitzQuiz** (*Kahoot-style* speed & hot-streak 4-pad trivia)
+Everything (your Discord Pairing Code, Server Display Name, optional AI Pack Generator keys, and optional Local Web Password) is configured **directly in your browser at `http://localhost:8080`** (or `http://<your-server-ip>:8080`) after starting the container!
 
 ---
 
-## Quick Start (30 Seconds with Docker)
+## 1. Install Container (Zero Env Vars Needed!)
 
-1. Join a Voice Channel in your Discord server and launch **PartyNode**.
-2. Click **`Host Node`** in the top bar (requires Discord's **`Manage Server`** permission) and click **`Generate Server Pairing Token`**.
-3. Copy the ready-to-run `docker-compose.yml` snippet shown inside Discord and run:
-
-```bash
-docker compose up -d
-```
-
-Within 2 seconds, your Discord Activity badge will turn green (`🟢 Self-Hosted Node`)!
-
----
-
-## Deploy with Docker Compose / Portainer / Dockge
-
-No `git clone` or local build required—save this as `docker-compose.yml` (or paste the pre-filled snippet from Discord's **`Host Node`** modal):
+Paste into **Portainer Stacks**, **Dockge**, or save as `docker-compose.yml` and run `docker compose up -d`:
 
 ```yaml
 services:
@@ -37,40 +17,31 @@ services:
     container_name: partynode-host
     restart: unless-stopped
     ports:
-      - "8080:8080" # Local Pack Studio & Node Status Web UI
-    environment:
-      - GATEWAY_WS_URL=wss://partynode.yourdomain.com/ws/node
-      - PAIRING_TOKEN=pn_paste_your_server_pairing_token_here
-      - NODE_NAME=My Community PartyNode
+      - "8080:8080"
     volumes:
-      - ./partynode-data:/app/data
+      - partynode_node_data:/app/data
+
+volumes:
+  partynode_node_data:
 ```
 
-Then run:
-```bash
-docker compose up -d
-```
+*(Or run as a single command: `docker run -d --name partynode-host -p 8080:8080 -v partynode_node_data:/app/data --restart unless-stopped ghcr.io/reckertiii/partynode-node:latest`)*
 
 ---
 
-## Local Pack Studio & Optional AI Generator
+## 2. Configure & Pair in Your Browser (`:8080`)
 
-While your node is running, you can create, import (CSV/Excel/JSON), and manage custom packs in **two places**:
-1. **Directly inside Discord:** Click **`Pack Studio`** in the top bar of the PartyNode Activity.
-2. **Locally in your browser:** Open `http://localhost:8080` on your host machine.
+1. Join a Voice Channel in your Discord server and launch **PartyNode**.
+2. Click **`Host Node`** in the top bar (requires Discord **`Manage Server`** permission) -> **`Generate Server Pairing Token`** -> **Copy Quick-Pair Code** (`pnpair_...`).
+3. Open **`http://localhost:8080`** (or `http://<your-server-ip>:8080`) in your browser.
+4. Paste your **Quick-Pair Code** (and optionally add a Gemini API Key or Local Ollama URL for 1-click AI packs, or set an Admin Password) and click **`Save & Connect Now`**!
 
-### Optional 1-Click AI Topic Generator
-Want to generate full trivia, survey, bluff, or prompt packs from any topic? Add either of these to your `.env`:
-- **Google Gemini:** `GEMINI_API_KEY=your_key_here`
-- **Local Ollama / OpenAI-compatible server:**
-  ```env
-  OPENAI_BASE_URL=http://host.docker.internal:11434/v1
-  OPENAI_MODEL=llama3.1
-  ```
+Within 1 second, your Discord Activity badge turns green (`🟢 Self-Hosted Node`), and all settings & custom packs are saved persistently inside `partynode_node_data`.
 
 ---
 
-## Privacy & Security
-- **No inbound ports to the internet:** Only outbound `wss://` is used to talk to the Discord Activity Gateway.
-- **Local data ownership:** All custom question packs live on your machine inside `./partynode-data/custom-packs.json`.
-- **LAN studio lock:** Set `NODE_ADMIN_KEY` in `.env` if you want password protection on `http://localhost:8080`.
+## Supported Party Games
+- **Punchline Clash** (*Quiplash-style* head-to-head comedy prompts + 3-medal Final Showdown)
+- **Bluff Battle** (*Fibbage-style* truth-and-lies deception with fuzzy Truth Guard + 😂 Best Bluff bonuses)
+- **Survey Showdown** (*Family Feud-style* ranked survey flip board with Auto-Judge + optional Live MC Answer Sheet)
+- **BlitzQuiz** (*Kahoot-style* speed & hot-streak 4-pad trivia)
