@@ -1,0 +1,20 @@
+{
+  "name": "partynode-server",
+  "version": "1.0.0",
+  "description": "Self-Hosted Bring-Your-Own-Server (BYOS) Game Node & Local Pack Studio for the PartyNode Discord Activity",
+  "license": "MIT",
+  "workspaces": [
+    "packages/shared",
+    "packages/game-engine",
+    "packages/self-hosted-node"
+  ],
+  "scripts": {
+    "build": "npm run build -w @partynode/shared && npm run build -w @partynode/game-engine && npm run build -w @partynode/self-hosted-node",
+    "start": "node packages/self-hosted-node/dist/index.js",
+    "test": "npm run build && npm test -w @partynode/shared && npm test -w @partynode/game-engine"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2"
+  }
+}

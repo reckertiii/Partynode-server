@@ -1,0 +1,11 @@
+node_modules/
+dist/
+data/
+partynode-data/
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+*.tar.gz
+.DS_Store
+Thumbs.db
