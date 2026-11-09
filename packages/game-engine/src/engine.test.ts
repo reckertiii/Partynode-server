@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import type { GuildHostingInfo, ServerEvent } from '@partynode/shared';
-import { PackStore, RoomSession, generatePackWithAi } from './index.js';
+import { PackStore, RoomSession, generatePackWithAi, formatAiErrorMessage } from './index.js';
 
 const mockHosting: GuildHostingInfo = {
   guildId: 'g-1',
@@ -227,5 +227,21 @@ describe('@partynode/game-engine', () => {
       }
       room.handleAction('p1', true, { type: 'return_to_lobby' }, 2050 + match * 100);
     }
+  });
+
+  it('extracts human-readable error messages from Google GenAI SDK HTTP error bodies', () => {
+    const sdkErr = Object.assign(new Error('400 API error occurred: {"httpMeta":{}}'), {
+      status: 400,
+      body: JSON.stringify([
+        {
+          error: {
+            code: 400,
+            message: 'API key not valid. Please pass a valid API key.',
+            status: 'INVALID_ARGUMENT'
+          }
+        }
+      ])
+    });
+    assert.equal(formatAiErrorMessage(sdkErr), 'API key not valid. Please pass a valid API key.');
   });
 });

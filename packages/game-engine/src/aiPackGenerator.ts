@@ -122,16 +122,51 @@ Generate ${req.count} survey questions, each with 5 to 6 ranked answers whose po
 Generate ${req.count} engaging multiple-choice questions, each with exactly 4 options, a valid correctIndex (0..3), and timeLimitSec (15). ${tone}`;
 }
 
+function stripJsonCodeFences(raw: string): string {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('```')) {
+    return trimmed
+      .replace(/^```(?:json)?\s*/i, '')
+      .replace(/\s*```$/, '')
+      .trim();
+  }
+  return trimmed;
+}
+
+export function formatAiErrorMessage(err: unknown): string {
+  if (!err || typeof err !== 'object') {
+    return String(err || 'Unknown AI generation error.');
+  }
+  const maybeErr = err as { message?: string; body?: unknown; status?: number; cause?: unknown };
+  if (typeof maybeErr.body === 'string' && maybeErr.body.trim()) {
+    try {
+      const parsed = JSON.parse(maybeErr.body) as unknown;
+      const root = Array.isArray(parsed) ? parsed[0] : parsed;
+      const apiMsg = (root as { error?: { message?: string } } | null)?.error?.message;
+      if (apiMsg && typeof apiMsg === 'string') {
+        return apiMsg;
+      }
+    } catch {
+      // Fall back to standard message below
+    }
+  }
+  if (maybeErr.cause instanceof Error && maybeErr.cause.message) {
+    return formatAiErrorMessage(maybeErr.cause);
+  }
+  return maybeErr.message || 'Unknown AI generation error.';
+}
+
 function assembleValidatedPack(
   rawObj: Record<string, unknown>,
   req: AiPackRequest,
   authorLabel: string
 ): ContentPack {
   const suffix = Math.floor(1000 + Math.random() * 9000);
+  const cleanTitle = String(rawObj.title || `${req.topic} Pack`).trim().slice(0, 60);
   const base = {
     id: `ai-${req.game.split('_')[0]}-${suffix}`,
-    title: String(rawObj.title || `${req.topic} Pack`).slice(0, 60),
-    description: String(rawObj.description || `Generated pack for ${req.topic}`).slice(0, 140),
+    title: cleanTitle.length >= 2 ? cleanTitle : `${req.topic} Pack`,
+    description: String(rawObj.description || `Generated pack for ${req.topic}`).trim().slice(0, 140),
     author: authorLabel,
     familyFriendly: req.familyFriendly,
     builtIn: false,
@@ -140,58 +175,95 @@ function assembleValidatedPack(
 
   let candidate: ContentPack;
   if (req.game === 'punchline_clash') {
+    const prompts = (Array.isArray(rawObj.prompts) ? rawObj.prompts : [])
+      .map((p) => String(p || '').trim())
+      .filter(Boolean);
+    const finalPrompts = (Array.isArray(rawObj.finalPrompts) ? rawObj.finalPrompts : [])
+      .map((p) => String(p || '').trim())
+      .filter(Boolean);
     candidate = {
       ...base,
       game: 'punchline_clash',
-      prompts: (Array.isArray(rawObj.prompts) ? rawObj.prompts : []).map(String),
-      finalPrompts: (Array.isArray(rawObj.finalPrompts) ? rawObj.finalPrompts : ['Write a 3-word motto about ' + req.topic]).map(String)
+      prompts,
+      finalPrompts:
+        finalPrompts.length > 0 ? finalPrompts : [`Write a three-word motto about ${req.topic}.`]
     };
   } else if (req.game === 'bluff_battle') {
     const qs = Array.isArray(rawObj.questions) ? rawObj.questions : [];
     candidate = {
       ...base,
       game: 'bluff_battle',
-      questions: qs.map((q: Record<string, unknown>, i: number) => ({
-        id: `bb-ai-${i + 1}`,
-        category: String(q.category || req.topic),
-        prompt: String(q.prompt || ''),
-        truth: String(q.truth || ''),
-        decoys: Array.isArray(q.decoys) ? q.decoys.map(String).slice(0, 4) : ['Mystery Option']
-      }))
+      questions: qs
+        .map((q: Record<string, unknown>, i: number) => {
+          const decoys = (Array.isArray(q.decoys) ? q.decoys : [])
+            .map((d) => String(d || '').trim())
+            .filter(Boolean)
+            .slice(0, 4);
+          return {
+            id: `bb-ai-${i + 1}`,
+            category: String(q.category || req.topic).trim() || req.topic,
+            prompt: String(q.prompt || '').trim(),
+            truth: String(q.truth || '').trim(),
+            decoys: decoys.length > 0 ? decoys : ['Unexpected Twist', 'Secret Prototype', 'Local Legend']
+          };
+        })
+        .filter((q) => q.prompt && q.truth)
     };
   } else if (req.game === 'survey_showdown') {
     const qs = Array.isArray(rawObj.questions) ? rawObj.questions : [];
     candidate = {
       ...base,
       game: 'survey_showdown',
-      questions: qs.map((q: Record<string, unknown>, i: number) => ({
-        id: `sv-ai-${i + 1}`,
-        prompt: String(q.prompt || ''),
-        answers: (Array.isArray(q.answers) ? q.answers : []).slice(0, 8).map((a: Record<string, unknown>) => ({
-          text: String(a.text || ''),
-          points: Number(a.points) || 10,
-          aliases: Array.isArray(a.aliases) ? a.aliases.map(String) : []
-        }))
-      }))
+      questions: qs
+        .map((q: Record<string, unknown>, i: number) => {
+          const answers = (Array.isArray(q.answers) ? q.answers : [])
+            .map((a: Record<string, unknown>) => ({
+              text: String(a.text || '').trim(),
+              points: Math.max(1, Math.round(Number(a.points) || 10)),
+              aliases: Array.isArray(a.aliases)
+                ? a.aliases.map((al) => String(al || '').trim()).filter(Boolean)
+                : []
+            }))
+            .filter((a) => a.text)
+            .slice(0, 8);
+          while (answers.length < 2) {
+            answers.push({
+              text: answers.length === 0 ? `Top Pick for ${req.topic}` : `Runner-Up for ${req.topic}`,
+              points: answers.length === 0 ? 60 : 40,
+              aliases: []
+            });
+          }
+          return {
+            id: `sv-ai-${i + 1}`,
+            prompt: String(q.prompt || '').trim(),
+            answers
+          };
+        })
+        .filter((q) => q.prompt)
     };
   } else {
     const qs = Array.isArray(rawObj.questions) ? rawObj.questions : [];
     candidate = {
       ...base,
       game: 'blitz_quiz',
-      questions: qs.map((q: Record<string, unknown>, i: number) => {
-        const opts = Array.isArray(q.options) ? q.options.map(String).slice(0, 4) : [];
-        while (opts.length < 4) opts.push(`Option ${opts.length + 1}`);
-        const cIdx = Number(q.correctIndex);
-        return {
-          id: `bq-ai-${i + 1}`,
-          category: String(q.category || req.topic),
-          prompt: String(q.prompt || ''),
-          options: opts as [string, string, string, string],
-          correctIndex: ([0, 1, 2, 3].includes(cIdx) ? cIdx : 0) as 0 | 1 | 2 | 3,
-          timeLimitSec: Number(q.timeLimitSec) || 15
-        };
-      })
+      questions: qs
+        .map((q: Record<string, unknown>, i: number) => {
+          const opts = (Array.isArray(q.options) ? q.options : [])
+            .map((o) => String(o || '').trim())
+            .filter(Boolean)
+            .slice(0, 4);
+          while (opts.length < 4) opts.push(`Option ${opts.length + 1}`);
+          const cIdx = Number(q.correctIndex);
+          return {
+            id: `bq-ai-${i + 1}`,
+            category: String(q.category || req.topic).trim() || req.topic,
+            prompt: String(q.prompt || '').trim(),
+            options: opts as [string, string, string, string],
+            correctIndex: ([0, 1, 2, 3].includes(cIdx) ? cIdx : 0) as 0 | 1 | 2 | 3,
+            timeLimitSec: Number(q.timeLimitSec) || 15
+          };
+        })
+        .filter((q) => q.prompt)
     };
   }
 
@@ -311,23 +383,45 @@ export async function generatePackWithAi(
   if (geminiKey) {
     const client = new GoogleGenAI({ apiKey: geminiKey });
     const schema = getJsonSchemaForGame(req.game);
-    const interaction = await client.interactions.create({
-      model: 'gemini-3.8-flash',
-      input: buildGenerationPrompt(req),
-      response_format: {
-        type: 'text',
-        mime_type: 'application/json',
-        schema
-      },
-      store: false
-    });
+    const inputPrompt = buildGenerationPrompt(req);
+    const candidateModels: Array<{ id: string; label: string }> = [
+      { id: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+      { id: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' }
+    ];
 
-    const outputText = interaction.output_text || '{}';
-    const parsed = JSON.parse(outputText) as Record<string, unknown>;
-    return {
-      pack: assembleValidatedPack(parsed, req, 'Gemini 3.8 Flash'),
-      provider: 'gemini-3.8-flash'
-    };
+    let lastErr: unknown = null;
+    for (let i = 0; i < candidateModels.length; i++) {
+      const m = candidateModels[i];
+      try {
+        const interaction = await client.interactions.create({
+          model: m.id,
+          input: inputPrompt,
+          response_format: {
+            type: 'text',
+            mime_type: 'application/json',
+            schema
+          },
+          store: false
+        });
+
+        const outputText = stripJsonCodeFences(interaction.output_text || '{}');
+        const parsed = JSON.parse(outputText) as Record<string, unknown>;
+        return {
+          pack: assembleValidatedPack(parsed, req, m.label),
+          provider: m.id
+        };
+      } catch (err) {
+        lastErr = err;
+        const status = (err as { status?: number; statusCode?: number })?.status ??
+          (err as { statusCode?: number })?.statusCode;
+        const msg = formatAiErrorMessage(err);
+        const isAuthError = status === 401 || status === 403 || /api key not valid|api_key_invalid/i.test(msg);
+        if (isAuthError || i === candidateModels.length - 1) {
+          throw new Error(msg);
+        }
+      }
+    }
+    throw new Error(formatAiErrorMessage(lastErr));
   }
 
   const openAiBase = (process.env.OPENAI_BASE_URL || '').trim().replace(/\/$/, '');
