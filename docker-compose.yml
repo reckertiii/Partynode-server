@@ -15,4 +15,7 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-}
     volumes:
-      - ./partynode-data:/app/data
+      - partynode_node_data:/app/data
+
+volumes:
+  partynode_node_data:
