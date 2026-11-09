@@ -32,8 +32,10 @@ export class RoomSession {
   private leaderId: string | null = null;
   private familyFriendly = true;
   private selectedGame: GameMode = 'punchline_clash';
-  private selectedPackId = 'builtin-punchline-classic';
+  private selectedPackId = 'builtin-megamix-punchline';
   private screen: ActiveScreen = 'lobby';
+  private usedItemHistory = new Map<string, Set<string>>();
+  private readonly deterministicOrder: boolean;
 
   private punchlineEngine: PunchlineClashEngine | null = null;
   private bluffEngine: BluffBattleEngine | null = null;
@@ -47,13 +49,62 @@ export class RoomSession {
     guildId: string,
     hosting: GuildHostingInfo,
     packStore: PackStore,
-    emit: EmitToPlayerFn
+    emit: EmitToPlayerFn,
+    options?: { deterministicOrder?: boolean }
   ) {
     this.instanceId = instanceId;
     this.guildId = guildId;
     this.hosting = hosting;
     this.packStore = packStore;
     this.emit = emit;
+    this.deterministicOrder = options?.deterministicOrder ?? false;
+  }
+
+  private drawMatchSlice<T>(
+    namespace: string,
+    items: readonly T[],
+    getKey: (item: T) => string,
+    desiredCount: number
+  ): T[] {
+    if (items.length === 0) return [];
+    const targetCount = Math.min(desiredCount, items.length);
+
+    if (this.deterministicOrder) {
+      return items.slice(0, targetCount);
+    }
+
+    let seen = this.usedItemHistory.get(namespace);
+    if (!seen) {
+      seen = new Set<string>();
+      this.usedItemHistory.set(namespace, seen);
+    }
+
+    const shuffleArr = (arr: T[]): T[] => {
+      const copy = [...arr];
+      for (let i = copy.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [copy[i], copy[j]] = [copy[j], copy[i]];
+      }
+      return copy;
+    };
+
+    let unseen = items.filter((item) => !seen!.has(getKey(item)));
+    if (unseen.length < targetCount) {
+      // Carry over remaining unseen items first, then reset deck for the rest!
+      const carryOver = shuffleArr(unseen);
+      seen.clear();
+      for (const c of carryOver) seen.add(getKey(c));
+      const refilled = shuffleArr(items.filter((item) => !seen!.has(getKey(item))));
+      const selected = [...carryOver, ...refilled].slice(0, targetCount);
+      for (const s of selected) seen.add(getKey(s));
+      return selected;
+    }
+
+    const selected = shuffleArr(unseen).slice(0, targetCount);
+    for (const s of selected) {
+      seen.add(getKey(s));
+    }
+    return selected;
   }
 
   public updateHostingInfo(hosting: GuildHostingInfo): void {
@@ -218,22 +269,63 @@ export class RoomSession {
         this.blitzEngine = null;
 
         if (this.selectedGame === 'punchline_clash') {
+          const basePack = pack as PunchlinePack;
+          const matchPack: PunchlinePack = {
+            ...basePack,
+            prompts: this.drawMatchSlice(`${basePack.id}:prompts`, basePack.prompts, (p) => p, 18),
+            finalPrompts: this.drawMatchSlice(
+              `${basePack.id}:finals`,
+              basePack.finalPrompts,
+              (p) => p,
+              2
+            )
+          };
           this.punchlineEngine = new PunchlineClashEngine(
-            pack as PunchlinePack,
+            matchPack,
             connected,
             this.familyFriendly,
             now
           );
         } else if (this.selectedGame === 'bluff_battle') {
-          this.bluffEngine = new BluffBattleEngine(pack as BluffPack, this.familyFriendly, now);
+          const basePack = pack as BluffPack;
+          const matchPack: BluffPack = {
+            ...basePack,
+            questions: this.drawMatchSlice(
+              `${basePack.id}:questions`,
+              basePack.questions,
+              (q) => q.id || q.prompt,
+              6
+            )
+          };
+          this.bluffEngine = new BluffBattleEngine(matchPack, this.familyFriendly, now);
         } else if (this.selectedGame === 'survey_showdown') {
+          const basePack = pack as SurveyPack;
+          const matchPack: SurveyPack = {
+            ...basePack,
+            questions: this.drawMatchSlice(
+              `${basePack.id}:questions`,
+              basePack.questions,
+              (q) => q.id || q.prompt,
+              3
+            )
+          };
           this.surveyEngine = new SurveyShowdownEngine(
-            pack as SurveyPack,
+            matchPack,
             connected,
             this.familyFriendly
           );
         } else if (this.selectedGame === 'blitz_quiz') {
-          this.blitzEngine = new BlitzQuizEngine(pack as BlitzPack, now);
+          const basePack = pack as BlitzPack;
+          const matchPack: BlitzPack = {
+            ...basePack,
+            questions: this.drawMatchSlice(
+              `${basePack.id}:questions`,
+              basePack.questions,
+              (q) => q.id || q.prompt,
+              10
+            )
+          };
+          this.blitzEngine = new BlitzQuizEngine(matchPack, now);
         }
 
         this.screen = this.selectedGame;

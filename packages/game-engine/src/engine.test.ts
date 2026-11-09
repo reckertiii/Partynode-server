@@ -73,9 +73,16 @@ describe('@partynode/game-engine', () => {
   it('runs Bluff Battle with Truth Guard, hidden truth during picking, and fooling + truth rewards', () => {
     const toasts: string[] = [];
     const store = new PackStore(null);
-    const room = new RoomSession('inst-bluff', 'g-1', mockHosting, store, (_inst, _pid, ev) => {
-      if (ev.type === 'toast') toasts.push(ev.message);
-    });
+    const room = new RoomSession(
+      'inst-bluff',
+      'g-1',
+      mockHosting,
+      store,
+      (_inst, _pid, ev) => {
+        if (ev.type === 'toast') toasts.push(ev.message);
+      },
+      { deterministicOrder: true }
+    );
 
     room.joinPlayer(makePlayer('p1', 'Trickster', true));
     room.joinPlayer(makePlayer('p2', 'Gullible'));
@@ -154,7 +161,9 @@ describe('@partynode/game-engine', () => {
 
   it('runs BlitzQuiz with hidden correctIndex during question and speed+streak points on reveal', () => {
     const store = new PackStore(null);
-    const room = new RoomSession('inst-3', 'g-1', mockHosting, store, () => {});
+    const room = new RoomSession('inst-3', 'g-1', mockHosting, store, () => {}, {
+      deterministicOrder: true
+    });
 
     room.joinPlayer(makePlayer('p1', 'Speedy', true));
     room.joinPlayer(makePlayer('p2', 'Slowpoke'));
@@ -190,6 +199,33 @@ describe('@partynode/game-engine', () => {
       });
       assert.equal(pack.game, game);
       assert.equal(provider, 'offline-scaffold');
+    }
+  });
+
+  it('shuffles questions and avoids repeating questions across back-to-back rematches', () => {
+    const store = new PackStore(null);
+    const room = new RoomSession('inst-rematch', 'g-1', mockHosting, store, () => {});
+    room.joinPlayer(makePlayer('p1', 'Host', true));
+    room.joinPlayer(makePlayer('p2', 'Guest'));
+
+    room.handleAction(
+      'p1',
+      true,
+      { type: 'lobby_configure', selectedGame: 'bluff_battle', selectedPackId: 'builtin-bluff-weird-world' },
+      1000
+    );
+
+    const seenFirstPrompts = new Set<string>();
+    for (let match = 0; match < 3; match++) {
+      room.handleAction('p1', true, { type: 'lobby_start_game' }, 2000 + match * 100);
+      const snap = room.getSnapshotForPlayer('p1', 2000 + match * 100);
+      assert.equal(snap.gameView?.mode, 'bluff_battle');
+      if (snap.gameView?.mode === 'bluff_battle') {
+        assert.equal(snap.gameView.totalQuestions, 6);
+        assert.equal(seenFirstPrompts.has(snap.gameView.prompt), false);
+        seenFirstPrompts.add(snap.gameView.prompt);
+      }
+      room.handleAction('p1', true, { type: 'return_to_lobby' }, 2050 + match * 100);
     }
   });
 });
