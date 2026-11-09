@@ -26,16 +26,29 @@ Within 2 seconds, your Discord Activity badge will turn green (`🟢 Self-Hosted
 
 ---
 
-## Build & Run from Source
+## Deploy with Docker Compose / Portainer / Dockge
 
-Prefer inspecting and building this repository yourself?
+No `git clone` or local build required—save this as `docker-compose.yml` (or paste the pre-filled snippet from Discord's **`Host Node`** modal):
 
+```yaml
+services:
+  partynode-host:
+    image: ghcr.io/reckertiii/partynode-node:latest
+    container_name: partynode-host
+    restart: unless-stopped
+    ports:
+      - "8080:8080" # Local Pack Studio & Node Status Web UI
+    environment:
+      - GATEWAY_WS_URL=wss://partynode.yourdomain.com/ws/node
+      - PAIRING_TOKEN=pn_paste_your_server_pairing_token_here
+      - NODE_NAME=My Community PartyNode
+    volumes:
+      - ./partynode-data:/app/data
+```
+
+Then run:
 ```bash
-git clone https://github.com/reckertiii/Partynode-server.git
-cd Partynode-server
-cp .env.example .env
-# Edit .env with your GATEWAY_WS_URL and PAIRING_TOKEN from Discord
-docker compose up -d --build
+docker compose up -d
 ```
 
 ---

@@ -1,6 +1,7 @@
 services:
   partynode-host:
-    build: .
+    image: ghcr.io/reckertiii/partynode-node:latest
+    container_name: partynode-host
     restart: unless-stopped
     ports:
       - "8080:8080" # Local Pack Studio & Node Status Web UI
