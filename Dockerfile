@@ -29,6 +29,6 @@ COPY --from=builder /app/packages/game-engine/dist ./packages/game-engine/dist
 COPY --from=builder /app/packages/self-hosted-node/package.json ./packages/self-hosted-node/
 COPY --from=builder /app/packages/self-hosted-node/dist ./packages/self-hosted-node/dist
 
-VOLUME ["/app/data"]
+RUN mkdir -p /app/data
 EXPOSE 8080
 CMD ["node", "packages/self-hosted-node/dist/index.js"]
