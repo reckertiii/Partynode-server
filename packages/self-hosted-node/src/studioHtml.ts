@@ -386,7 +386,11 @@ export function renderLocalStudioHtml(initialNodeName: string): string {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Failed');
         selectPack(data.pack);
-        setMsg('✨ Generated via ' + data.provider + '! Click "Save to Node" to publish.', '#34d399');
+        if (data.provider === 'offline-scaffold') {
+          setMsg('⚠️ No Gemini API key configured — loaded an editable starter template instead. Add your free AIza... key in Node Settings above!', '#fbbf24');
+        } else {
+          setMsg('✨ Generated via ' + data.provider + '! Click "Save to Node" to publish.', '#34d399');
+        }
       } catch (e) {
         setMsg('❌ ' + e.message, '#f87171');
       }

@@ -579,6 +579,13 @@ export class RoomSession {
           this.sendToast(playerId, 'error', res.error ?? 'Invalid pack.');
           return;
         }
+        if (this.screen === 'lobby' && res.pack) {
+          this.selectedGame = res.pack.game;
+          this.selectedPackId = res.pack.id;
+          if (!res.pack.familyFriendly && this.familyFriendly) {
+            this.familyFriendly = false;
+          }
+        }
         this.sendToast(playerId, 'success', `Saved pack "${res.pack!.title}"!`);
         this.emit(this.instanceId, playerId, {
           type: 'studio_packs_list',
@@ -593,6 +600,12 @@ export class RoomSession {
         if (!res.ok) {
           this.sendToast(playerId, 'error', res.error ?? 'Could not delete pack.');
           return;
+        }
+        if (this.selectedPackId === action.packId) {
+          this.selectedPackId = this.packStore.getDefaultPackForGame(
+            this.selectedGame,
+            this.familyFriendly
+          ).id;
         }
         this.sendToast(playerId, 'info', 'Custom pack deleted.');
         this.emit(this.instanceId, playerId, {
