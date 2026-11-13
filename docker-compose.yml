@@ -1,6 +1,7 @@
 services:
   partynode-host:
     image: ghcr.io/reckertiii/partynode-node:latest
+    pull_policy: always
     container_name: partynode-host
     restart: unless-stopped
     ports:
